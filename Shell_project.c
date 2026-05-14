@@ -35,9 +35,60 @@
 // Declara aqui las variables globales que tengan que ser accedidas desde los
 //  manejadores establecidos con signal() o sigaction()
 
+list_head_t *job_list;
+
+
 
 // -----------------------------------------------------------------------------
 // Useful functions to deal with signal handlers and signal masks
+
+void manejador(int signal){
+
+    job *current_job;
+    int wstatus;
+    int pid_ret;
+
+     mask_signal(SIGCHLD, SIG_BLOCK);
+
+    for (int i = 0; i < list_size(job_list); i++)
+    {
+        current_job = get_item_bypos(job_list,i);
+        pid_ret = waitpid(current_job->pgid, &wstatus, WNOHANG | WUNTRACED | WCONTINUED);
+
+        if ( pid_ret == current_job->pgid){
+
+            if (WIFEXITED(wstatus)){
+
+                    printf("[%d] (%s) Terminated with status: %d\n", current_job->pgid, current_job->command, WEXITSTATUS(wstatus));
+                    del_job(job_list, current_job);
+                    free_job(current_job);
+
+            }else if (WIFSIGNALED(wstatus)){
+                    printf("[%d] (%s) Signaled by signal: %d\n", current_job->pgid, current_job->command, WTERMSIG(wstatus));
+                    del_job(job_list, current_job);
+                    free_job(current_job);
+
+            }else if (WIFSTOPPED(wstatus)) {
+                    printf("[%d] (%s) Stopped by signal: %d\n", current_job, current_job->command, WSTOPSIG(wstatus));
+                    current_job->state = STOPPED;
+            }else if (WIFCONTINUED(wstatus)) {
+                printf("[%d] (%s) Continued\n",current_job->pgid, current_job->command);
+                current_job->state = BACKGROUND;
+            }
+        }
+
+    }
+
+    mask_signal(SIGCHLD, SIG_UNBLOCK);
+    
+}
+
+
+
+
+
+
+
 // -----------------------------------------------------------------------------
 // set a handler (SIG_IGN or SIG_DFL) for signal sent by terminal
 void terminal_signals(void (*func)(int))
@@ -77,8 +128,11 @@ int main(void)
     int last_pid = 0;         // Al principio no hay un proceso anterior
     int retval = 0;           // Al principio el estado es 0
 
+    job_list = new_list("jobs");
+
     
     terminal_signals(SIG_IGN);
+    signal(SIGCHLD, manejador);
 
     while (1) {
         free_argv(argv);
@@ -96,10 +150,17 @@ int main(void)
         parse_escape(argv);
 
         if ( strcmp(argv[0], "cd") == 0){
-            chdir(argv[1]);
             if (chdir(argv[1]) == -1) {
                 perror(argv[1]);
             }
+            continue;
+        }
+
+        if (strcmp(argv[0], "jobs") == 0) {
+
+            mask_signal(SIGCHLD, SIG_BLOCK);
+            print_job_list(job_list);
+            mask_signal(SIGCHLD, SIG_UNBLOCK);
             continue;
         }
 
@@ -140,10 +201,16 @@ int main(void)
                     printf("[%d] (%s) Signaled by signal: %d\n", pid_fork, argv[0], WTERMSIG(wstatus));
 
                 }else if (WIFSTOPPED(wstatus)) {
+                    mask_signal(SIGCHLD, SIG_BLOCK);
+                    add_job(job_list, new_job(pid_fork, argv[0], STOPPED));
+                    mask_signal(SIGCHLD, SIG_UNBLOCK);
                     printf("[%d] (%s) Stopped by signal: %d\n", pid_fork, argv[0], WSTOPSIG(wstatus));
                 }
         
             }else{
+                mask_signal(SIGCHLD, SIG_BLOCK);
+                add_job(job_list, new_job(pid_fork,argv[0],BACKGROUND));
+                mask_signal(SIGCHLD, SIG_UNBLOCK);
                 printf("[%d] (%s) Running in Background\n", pid_fork, argv[0]);
             }
         }
