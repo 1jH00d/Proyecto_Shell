@@ -73,6 +73,10 @@ int main(void)
     int wstatus;                // status returned by waitpid
     char *file_in, *file_out;   // for redirections
 
+    int shell_pid = getpid(); // getpid() nos da el PID de nuestro propio programa
+    int last_pid = 0;         // Al principio no hay un proceso anterior
+    int retval = 0;           // Al principio el estado es 0
+
     while (1) {
         free_argv(argv);
         int ret = get_command("ShellSO > ", &argc, &argv);
@@ -83,6 +87,7 @@ int main(void)
         if (argc == 0) continue; // empty command after parsing comment #
         argc = parse_background(argv, &background);
         if (argc == 0) continue; // empty command after parsing background &
+        subs_autovars(argv, shell_pid, last_pid, retval);
         argc = parse_redirections(argv,  &file_in, &file_out);
         if (argc == 0) continue; // empty command after parsing redirections
         parse_escape(argv);

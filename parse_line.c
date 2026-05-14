@@ -232,6 +232,39 @@ int parse_background(char **argv, int *background)
 }
 
 
+int subs_autovars(char **argv, int shell_pid, int last_pid, int retval)
+{
+    int i = 0;
+    
+    // Recorremos todos los argumentos hasta encontrar el final (NULL)
+    while (argv[i] != NULL) {
+        
+        // Comprobamos si el argumento es la variable $$
+        if (strcmp(argv[i], "$$") == 0) {
+            free(argv[i]);                 // Liberamos la cadena original "$$" 
+            argv[i] = malloc(32);          // Pedimos memoria nueva (32 bytes es de sobra para un número) 
+            sprintf(argv[i], "%d", shell_pid); // Escribimos el PID del shell como texto en esa memoria
+        }
+        // Comprobamos si el argumento es la variable $!
+        else if (strcmp(argv[i], "$!") == 0) {
+            free(argv[i]);                 // 
+            argv[i] = malloc(32);          // 
+            sprintf(argv[i], "%d", last_pid); 
+        }
+        // Comprobamos si el argumento es la variable $?
+        else if (strcmp(argv[i], "$?") == 0) {
+            free(argv[i]);                 // 
+            argv[i] = malloc(32);          // 
+            sprintf(argv[i], "%d", retval);
+        }
+        
+        i++;
+    }
+    
+    return i; // Retornamos el número de argumentos [cite: 442]
+}
+
+
 // -----------------------------------------------------------------------------
 // Parse redirections operators '<' '>' once argv structure has been built.
 // Example of use:
