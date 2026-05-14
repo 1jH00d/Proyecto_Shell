@@ -1,4 +1,4 @@
-EXEC = a.out
+EXEC = Shell
 SRCS = $(wildcard *.c)
 OBJS = $(SRCS:%.c=%.o)
 CC=gcc
