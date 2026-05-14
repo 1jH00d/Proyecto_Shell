@@ -42,6 +42,8 @@ list_head_t *job_list;
 // -----------------------------------------------------------------------------
 // Useful functions to deal with signal handlers and signal masks
 
+/*
+
 void manejador(int signal){
 
     job *current_job;
@@ -83,6 +85,7 @@ void manejador(int signal){
     
 }
 
+*/
 
 
 
@@ -109,7 +112,52 @@ void mask_signal(int signal, int block)
     sigprocmask(block, &mask, NULL); // block: SIG_BLOCK/SIG_UNBLOCK
 }
 // -----------------------------------------------------------------------------
+void manejador(int signal){
 
+    job *current_job;
+    int wstatus;
+    int pid_ret;
+
+    mask_signal(SIGCHLD, SIG_BLOCK);
+
+    int i = 1;
+    while (i <= job_list->count) {
+        current_job = get_job_bypos(job_list, i);
+        pid_ret = waitpid(current_job->pgid, &wstatus, WNOHANG | WUNTRACED | WCONTINUED);
+
+        if (pid_ret == current_job->pgid) {
+
+            if (WIFEXITED(wstatus)) {
+                printf("[%d] (%s) Terminated with status: %d\n", current_job->pgid, current_job->command, WEXITSTATUS(wstatus));
+                del_job(job_list, current_job);
+                free_job(current_job);
+                // no incrementes i
+
+            } else if (WIFSIGNALED(wstatus)) {
+                printf("[%d] (%s) Signaled by signal: %d\n", current_job->pgid, current_job->command, WTERMSIG(wstatus));
+                del_job(job_list, current_job);
+                free_job(current_job);
+                // no incrementes i
+
+            } else if (WIFSTOPPED(wstatus)) {
+                printf("[%d] (%s) Stopped by signal: %d\n", current_job->pgid, current_job->command, WSTOPSIG(wstatus));
+                current_job->state = STOPPED;
+                i++;
+
+            } else if (WIFCONTINUED(wstatus)) {
+                printf("[%d] (%s) Continued\n", current_job->pgid, current_job->command);
+                current_job->state = BACKGROUND;
+                i++;
+            }
+        } else {
+            i++;
+        }
+    }
+
+
+    mask_signal(SIGCHLD, SIG_UNBLOCK);
+    
+}
 
 // -----------------------------------------------------------------------------
 //                            MAIN          
@@ -161,6 +209,77 @@ int main(void)
             mask_signal(SIGCHLD, SIG_BLOCK);
             print_job_list(job_list);
             mask_signal(SIGCHLD, SIG_UNBLOCK);
+            continue;
+        }
+
+        if (strcmp(argv[0], "fg") == 0) {
+            job *working_job;
+
+            if (argv[1] != NULL) {
+                working_job = get_job_bypos(job_list, atoi(argv[1]));
+            } else {
+                working_job = get_job_bypos(job_list, 1);  // tarea actual = la más reciente
+            }
+
+            if (working_job == NULL) {
+                printf("fg: no jobs\n");
+                continue;
+            }
+
+            // a partir de aquí, mismo código para los dos casos
+            printf("[%d] (%s) Running in FOREGROUND\n", working_job->pgid, working_job->command);
+
+            mask_signal(SIGCHLD, SIG_BLOCK);
+            del_job(job_list, working_job);  // Elimino el job de la lista
+            mask_signal(SIGCHLD, SIG_UNBLOCK);
+
+            tcsetpgrp(STDIN_FILENO, working_job->pgid);              // Cedo terminal
+            working_job->state = FOREGROUND;                         // Cambio estado
+            killpg(working_job->pgid, SIGCONT);
+
+            waitpid(working_job->pgid, &wstatus, WUNTRACED);
+            tcsetpgrp(STDIN_FILENO, getpid());
+
+            if (WIFEXITED(wstatus)) {
+                printf("[%d] (%s) Terminated with status: %d\n", working_job->pgid, working_job->command, WEXITSTATUS(wstatus));
+                free_job(working_job);
+            } else if (WIFSIGNALED(wstatus)) {
+                printf("[%d] (%s) Signaled by signal: %d\n", working_job->pgid, working_job->command, WTERMSIG(wstatus));
+                free_job(working_job);
+            } else if (WIFSTOPPED(wstatus)) {
+                working_job->state = STOPPED;
+                mask_signal(SIGCHLD, SIG_BLOCK);
+                add_job(job_list, working_job);
+                mask_signal(SIGCHLD, SIG_UNBLOCK);
+                printf("[%d] (%s) Stopped by signal: %d\n", working_job->pgid, working_job->command, WSTOPSIG(wstatus));
+            }
+
+            continue;
+        }
+
+
+        if (strcmp(argv[0], "bg") == 0) {
+            job *working_job;
+
+            if (argv[1] != NULL) {
+                working_job = get_job_bypos(job_list, atoi(argv[1]));
+            } else {
+                working_job = get_job_bypos(job_list, 1);
+            }
+
+            if (working_job == NULL) {
+                printf("bg: no jobs\n");
+                continue;
+            }
+
+            if (working_job->state == STOPPED) {
+                printf("[%d] (%s) Running in BACKGROUND\n", working_job->pgid, working_job->command);
+                working_job->state = BACKGROUND;
+                killpg(working_job->pgid, SIGCONT);
+            } else if (working_job->state == BACKGROUND) {
+                printf("[%d] (%s) Already in BACKGROUND\n", working_job->pgid, working_job->command);
+            }
+
             continue;
         }
 
