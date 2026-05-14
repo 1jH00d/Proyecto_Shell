@@ -77,6 +77,9 @@ int main(void)
     int last_pid = 0;         // Al principio no hay un proceso anterior
     int retval = 0;           // Al principio el estado es 0
 
+    
+    terminal_signals(SIG_IGN);
+
     while (1) {
         free_argv(argv);
         int ret = get_command("ShellSO > ", &argc, &argv);
@@ -92,22 +95,42 @@ int main(void)
         if (argc == 0) continue; // empty command after parsing redirections
         parse_escape(argv);
 
+        if ( strcmp(argv[0], "cd") == 0){
+            chdir(argv[1]);
+            if (chdir(argv[1]) == -1) {
+                perror(argv[1]);
+            }
+            continue;
+        }
+
         pid_fork = fork();
 
         if ( pid_fork < 0 ){
              perror("Error en fork");
 
         }else if ( pid_fork == 0 ){                       // Zona del Hijo
+
+            setpgid(0,0);
+            terminal_signals(SIG_DFL);
+            
             
             execvp(argv[0],argv);
 
             perror(argv[0]); // Imprime el error [cite: 115]
             exit(EXIT_FAILURE); // El hijo debe morir si falla execvp
 
-        }else{                                           // Zona del Padre   
+        }else{                                           // Zona del Padre
+            
+            setpgid(pid_fork, pid_fork);         // race condition: también en el parent
             
             if ( background == 0 ){
-                waitpid(pid_fork, &wstatus, 0);
+
+                tcsetpgrp(STDIN_FILENO, pid_fork);   // ceder terminal al child
+
+                waitpid(pid_fork, &wstatus, WUNTRACED);
+
+                tcsetpgrp(STDIN_FILENO, getpid());   // recuperar terminal
+                
 
                 if (WIFEXITED(wstatus)){
 
@@ -116,6 +139,8 @@ int main(void)
                 }else if (WIFSIGNALED(wstatus)){
                     printf("[%d] (%s) Signaled by signal: %d\n", pid_fork, argv[0], WTERMSIG(wstatus));
 
+                }else if (WIFSTOPPED(wstatus)) {
+                    printf("[%d] (%s) Stopped by signal: %d\n", pid_fork, argv[0], WSTOPSIG(wstatus));
                 }
         
             }else{
