@@ -2,6 +2,8 @@
 // UNIX Shell Project
 // Naive list implementation
 // -----------------------------------------------------------------------------
+// Nombre: Jorge Barrios Lara
+// Asignatura: Sistemas Operativos 2025/2026
 
 #ifndef _NAIVE_LIST_H
 #define _NAIVE_LIST_H

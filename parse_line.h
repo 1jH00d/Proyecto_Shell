@@ -2,6 +2,8 @@
 // UNIX Shell Project
 // function prototypes and macros for line and argument parsing
 // -----------------------------------------------------------------------------
+// Nombre: Jorge Barrios Lara
+// Asignatura: Sistemas Operativos 2025/2026
 
 #ifndef _PARSE_LINE_H
 #define _PARSE_LINE_H

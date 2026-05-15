@@ -7,6 +7,9 @@
 // Dept. Arquitectura de Computadores - UMA
 //
 // Adapted from "Fundamentos de Sistemas Operativos", Silberschatz et al.
+
+// Nombre: Jorge Barrios Lara
+// Asignatura: Sistemas Operativos 2025/2026
 // -----------------------------------------------------------------------------
 
 #include <stdio.h>          // printf, stderr

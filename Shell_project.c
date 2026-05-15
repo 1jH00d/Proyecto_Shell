@@ -10,6 +10,8 @@
 //    ShellSO > 
 //     (then type ^D to exit program)
 //------------------------------------------------------------------------------
+// Nombre: Jorge Barrios Lara
+// Asignatura: Sistemas Operativos 2025/2026
 
 // standard headers
 #include <stdio.h>          // printf, stderr, perror, fprintf

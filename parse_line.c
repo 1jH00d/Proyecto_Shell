@@ -2,6 +2,8 @@
 // UNIX Shell Project
 // command line parsing
 // -----------------------------------------------------------------------------
+// Nombre: Jorge Barrios Lara
+// Asignatura: Sistemas Operativos 2025/2026
 
 #include <stdlib.h>     // malloc, realloc, free
 #include <stdio.h>      // perror, fprintf(debug)
