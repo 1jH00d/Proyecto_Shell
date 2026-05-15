@@ -292,7 +292,20 @@ int main(void)
 
             setpgid(0,0);
             terminal_signals(SIG_DFL);
-            
+
+            if (file_in != NULL) {
+                int fd = open(file_in, O_RDONLY);
+                if (fd == -1) { perror(file_in); exit(EXIT_FAILURE); }
+                dup2(fd, STDIN_FILENO);
+                close(fd);
+            }
+
+            if (file_out != NULL) {
+                int fd = open(file_out, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                if (fd == -1) { perror(file_out); exit(EXIT_FAILURE); }
+                dup2(fd, STDOUT_FILENO);
+                close(fd);
+            }
             
             execvp(argv[0],argv);
 
