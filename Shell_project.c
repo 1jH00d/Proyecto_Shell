@@ -114,51 +114,79 @@ void mask_signal(int signal, int block)
     sigprocmask(block, &mask, NULL); // block: SIG_BLOCK/SIG_UNBLOCK
 }
 // -----------------------------------------------------------------------------
-void manejador(int signal){
-
+// manejador (SIGCHLD handler)
+// Se ejecuta automáticamente cada vez que un proceso hijo cambia de estado
+// (termina, se suspende o se reanuda). Su función es:
+//   1. Recorrer la lista de jobs y comprobar cuál cambió de estado.
+//   2. Actualizar la lista: borrar el job si terminó, o cambiar su estado.
+//   3. Evitar procesos zombie llamando a waitpid con WNOHANG.
+//
+// Se usa WNOHANG para que waitpid no bloquee si el proceso no ha cambiado.
+// Se usa WUNTRACED para detectar suspensiones.
+// Se usa WCONTINUED para detectar reanudaciones.
+//
+// La señal SIGCHLD se bloquea durante la ejecución del manejador para evitar
+// que una segunda señal interrumpa el recorrido de la lista.
+// ------------------------------------------------------------------------------
+void manejador(int signal)
+{
     job *current_job;
     int wstatus;
     int pid_ret;
-
+ 
+    // Bloqueamos SIGCHLD para proteger el acceso a la lista
     mask_signal(SIGCHLD, SIG_BLOCK);
-
+ 
     int i = 1;
     while (i <= job_list->count) {
         current_job = get_job_bypos(job_list, i);
-        pid_ret = waitpid(current_job->pgid, &wstatus, WNOHANG | WUNTRACED | WCONTINUED);
-
+        pid_ret = waitpid(current_job->pgid, &wstatus,
+                          WNOHANG | WUNTRACED | WCONTINUED);
+ 
         if (pid_ret == current_job->pgid) {
-
+            // Este job cambió de estado
+ 
             if (WIFEXITED(wstatus)) {
-                printf("[%d] (%s) Terminated with status: %d\n", current_job->pgid, current_job->command, WEXITSTATUS(wstatus));
+                // El proceso terminó normalmente con exit()
+                printf("[%d] (%s) Terminated with status: %d\n",
+                       current_job->pgid, current_job->command,
+                       WEXITSTATUS(wstatus));
                 del_job(job_list, current_job);
                 free_job(current_job);
-                // no incrementes i
-
+                // No incrementamos i: el siguiente ocupa esta posición
+ 
             } else if (WIFSIGNALED(wstatus)) {
-                printf("[%d] (%s) Signaled by signal: %d\n", current_job->pgid, current_job->command, WTERMSIG(wstatus));
+                // El proceso terminó al recibir una señal (ej. SIGKILL)
+                printf("[%d] (%s) Signaled by signal: %d\n",
+                       current_job->pgid, current_job->command,
+                       WTERMSIG(wstatus));
                 del_job(job_list, current_job);
                 free_job(current_job);
-                // no incrementes i
-
+                // No incrementamos i: el siguiente ocupa esta posición
+ 
             } else if (WIFSTOPPED(wstatus)) {
-                printf("[%d] (%s) Stopped by signal: %d\n", current_job->pgid, current_job->command, WSTOPSIG(wstatus));
+                // El proceso se suspendió (ej. SIGTSTP, SIGTTIN)
+                printf("[%d] (%s) Stopped by signal: %d\n",
+                       current_job->pgid, current_job->command,
+                       WSTOPSIG(wstatus));
                 current_job->state = STOPPED;
                 i++;
-
+ 
             } else if (WIFCONTINUED(wstatus)) {
-                printf("[%d] (%s) Continued\n", current_job->pgid, current_job->command);
+                // El proceso se reanudó al recibir SIGCONT
+                printf("[%d] (%s) Continued\n",
+                       current_job->pgid, current_job->command);
                 current_job->state = BACKGROUND;
                 i++;
             }
         } else {
+            // Este job no cambió de estado, pasamos al siguiente
             i++;
         }
     }
-
-
+ 
+    // Desbloqueamos SIGCHLD al salir 
     mask_signal(SIGCHLD, SIG_UNBLOCK);
-    
 }
 
 // -----------------------------------------------------------------------------
@@ -199,12 +227,22 @@ int main(void)
         if (argc == 0) continue; // empty command after parsing redirections
         parse_escape(argv);
 
+        // ---------------------------------------------------------------------
+        // Comandos internos: el shell los ejecuta directamente sin hacer fork
+        // ---------------------------------------------------------------------
+ 
+        // Comando interno: cd
+        // Cambia el directorio de trabajo del shell usando chdir()
+
         if ( strcmp(argv[0], "cd") == 0){
             if (chdir(argv[1]) == -1) {
                 perror(argv[1]);
             }
             continue;
         }
+
+        // Comando interno: jobs
+        // Muestra la lista de tareas en segundo plano o suspendidas
 
         if (strcmp(argv[0], "jobs") == 0) {
 
@@ -214,8 +252,15 @@ int main(void)
             continue;
         }
 
+        // Comando interno: fg [n]
+        // Lleva una tarea (por posición n, o la más reciente si no hay argumento)
+        // a primer plano. Si estaba suspendida, le envía SIGCONT para reanudarla.
+        // El shell cede el terminal al job y espera a que termine o se suspenda.
+
         if (strcmp(argv[0], "fg") == 0) {
             job *working_job;
+
+            // Seleccionar el job: por posición o el más reciente (posición 1, LIFO)
 
             if (argv[1] != NULL) {
                 working_job = get_job_bypos(job_list, atoi(argv[1]));
@@ -231,16 +276,18 @@ int main(void)
             // a partir de aquí, mismo código para los dos casos
             printf("[%d] (%s) Running in FOREGROUND\n", working_job->pgid, working_job->command);
 
+            // Lo eliminamos de la lista antes de ponerlo en foreground
+
             mask_signal(SIGCHLD, SIG_BLOCK);
             del_job(job_list, working_job);  // Elimino el job de la lista
             mask_signal(SIGCHLD, SIG_UNBLOCK);
 
             tcsetpgrp(STDIN_FILENO, working_job->pgid);              // Cedo terminal
             working_job->state = FOREGROUND;                         // Cambio estado
-            killpg(working_job->pgid, SIGCONT);
+            killpg(working_job->pgid, SIGCONT);                     // Enviamos SIGCONT por si estaba suspendido
 
-            waitpid(working_job->pgid, &wstatus, WUNTRACED);
-            tcsetpgrp(STDIN_FILENO, getpid());
+            waitpid(working_job->pgid, &wstatus, WUNTRACED);        // Esperamos a que termine o se suspenda (igual que un foreground normal)
+            tcsetpgrp(STDIN_FILENO, getpid());                       // Recuperamos el terminal para el shell
 
             if (WIFEXITED(wstatus)) {
                 printf("[%d] (%s) Terminated with status: %d\n", working_job->pgid, working_job->command, WEXITSTATUS(wstatus));
@@ -259,9 +306,14 @@ int main(void)
             continue;
         }
 
+        // Comando interno: bg [n]
+        // Reanuda en segundo plano una tarea suspendida.
+        // Si ya estaba en background, informa de ello.
 
         if (strcmp(argv[0], "bg") == 0) {
             job *working_job;
+
+            // Seleccionar el job: por posición o el más reciente (posición 1, LIFO)
 
             if (argv[1] != NULL) {
                 working_job = get_job_bypos(job_list, atoi(argv[1]));
@@ -275,15 +327,25 @@ int main(void)
             }
 
             if (working_job->state == STOPPED) {
+
+                // Estaba suspendido: lo reanudamos en segundo plano
                 printf("[%d] (%s) Running in BACKGROUND\n", working_job->pgid, working_job->command);
                 working_job->state = BACKGROUND;
                 killpg(working_job->pgid, SIGCONT);
             } else if (working_job->state == BACKGROUND) {
+
+                // Ya estaba en segundo plano
                 printf("[%d] (%s) Already in BACKGROUND\n", working_job->pgid, working_job->command);
             }
 
             continue;
         }
+
+
+        // ---------------------------------------------------------------------
+        // Comando externo: creamos un proceso hijo para ejecutarlo
+        // ---------------------------------------------------------------------
+
 
         pid_fork = fork();
 
@@ -292,23 +354,35 @@ int main(void)
 
         }else if ( pid_fork == 0 ){                       // Zona del Hijo
 
+            // Creamos un nuevo grupo de procesos para este hijo.
+            // Así el shell y el comando son grupos independientes y las señales
+            // del terminal solo afectan al grupo que lo tiene asignado.
+
             setpgid(0,0);
+
+             // Restauramos las señales del terminal
             terminal_signals(SIG_DFL);
+
+            // Redirección de entrada estándar desde fichero
 
             if (file_in != NULL) {
                 int fd = open(file_in, O_RDONLY);
                 if (fd == -1) { perror(file_in); exit(EXIT_FAILURE); }
-                dup2(fd, STDIN_FILENO);
+                dup2(fd, STDIN_FILENO);   // stdin ahora lee del fichero
                 close(fd);
             }
+
+            // Redirección de salida estándar a fichero
 
             if (file_out != NULL) {
                 int fd = open(file_out, O_WRONLY | O_CREAT | O_TRUNC, 0644);
                 if (fd == -1) { perror(file_out); exit(EXIT_FAILURE); }
-                dup2(fd, STDOUT_FILENO);
+                dup2(fd, STDOUT_FILENO);   // stdout ahora escribe en el fichero
                 close(fd);
             }
             
+
+            // Sustituimos el código del hijo por el del programa a ejecutar
             execvp(argv[0],argv);
 
             perror(argv[0]); // Imprime el error [cite: 115]
@@ -320,6 +394,8 @@ int main(void)
             
             if ( background == 0 ){
 
+                // FOREGROUND: cedemos el terminal al hijo y esperamos
+
                 tcsetpgrp(STDIN_FILENO, pid_fork);   // ceder terminal al child
 
                 waitpid(pid_fork, &wstatus, WUNTRACED);
@@ -328,13 +404,18 @@ int main(void)
                 
 
                 if (WIFEXITED(wstatus)){
-
+                    
+                    // Terminó normalmente
                     printf("[%d] (%s) Terminated with status: %d\n", pid_fork, argv[0], WEXITSTATUS(wstatus));
 
                 }else if (WIFSIGNALED(wstatus)){
+
+                    // Terminó al recibir una señal (ej. CTRL+C → SIGINT)
                     printf("[%d] (%s) Signaled by signal: %d\n", pid_fork, argv[0], WTERMSIG(wstatus));
 
                 }else if (WIFSTOPPED(wstatus)) {
+
+                    // Se suspendió (ej. CTRL+Z → SIGTSTP)
                     mask_signal(SIGCHLD, SIG_BLOCK);
                     add_job(job_list, new_job(pid_fork, argv[0], STOPPED));
                     mask_signal(SIGCHLD, SIG_UNBLOCK);
@@ -342,6 +423,9 @@ int main(void)
                 }
         
             }else{
+
+                // BACKGROUND: no cedemos el terminal, el shell sigue activo
+                // Añadimos el job a la lista para poder gestionarlo después
                 mask_signal(SIGCHLD, SIG_BLOCK);
                 add_job(job_list, new_job(pid_fork,argv[0],BACKGROUND));
                 mask_signal(SIGCHLD, SIG_UNBLOCK);
