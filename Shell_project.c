@@ -241,6 +241,26 @@ int main(void)
             continue;
         }
 
+        // Comando interno: exit
+        // Sale del Shell
+
+        if ( strcmp(argv[0], "exit") == 0){
+
+            int exit_status = 0;
+
+            if (argv[1] != NULL) {
+                char *endptr;
+                long valor = strtol(argv[1], &endptr, 10);
+                if (*endptr == '\0') {
+                    // el argumento era un número entero válido
+                    exit_status = (int)valor;
+                }
+            }
+            exit(exit_status);
+            
+            continue;
+        }
+
         // Comando interno: jobs
         // Muestra la lista de tareas en segundo plano o suspendidas
 
