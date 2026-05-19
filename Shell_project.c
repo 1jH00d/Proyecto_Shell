@@ -261,6 +261,74 @@ int main(void)
             continue;
         }
 
+        // Comando interno: lanzabg
+        // Actua de forma identica a colocar un & al final del comando
+
+        if ( strcmp(argv[0], "lanzabg") == 0){
+
+            if (argv[1] == NULL) {
+                printf("lanzabg: falta el comando\n");
+                continue;
+            }
+            char **args1 = &argv[1];
+
+            pid_fork = fork();
+
+            if ( pid_fork < 0 ){
+                perror("Error en fork");
+
+            }else if ( pid_fork == 0 ){                       // Zona del Hijo
+
+                // Creamos un nuevo grupo de procesos para este hijo.
+                // Así el shell y el comando son grupos independientes y las señales
+                // del terminal solo afectan al grupo que lo tiene asignado.
+
+                setpgid(0,0);
+
+                // Restauramos las señales del terminal
+                terminal_signals(SIG_DFL);
+
+                // Redirección de entrada estándar desde fichero
+
+                if (file_in != NULL) {
+                    int fd = open(file_in, O_RDONLY);
+                    if (fd == -1) { perror(file_in); exit(EXIT_FAILURE); }
+                    dup2(fd, STDIN_FILENO);   // stdin ahora lee del fichero
+                    close(fd);
+                }
+
+                // Redirección de salida estándar a fichero
+
+                if (file_out != NULL) {
+                    int fd = open(file_out, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                    if (fd == -1) { perror(file_out); exit(EXIT_FAILURE); }
+                    dup2(fd, STDOUT_FILENO);   // stdout ahora escribe en el fichero
+                    close(fd);
+                }
+                
+
+                // Sustituimos el código del hijo por el del programa a ejecutar
+                execvp(args1[0],args1);
+
+                perror(args1[0]); // Imprime el error [cite: 115]
+                exit(EXIT_FAILURE); // El hijo debe morir si falla execvp
+
+            }else{                                           // Zona del Padre
+                
+                setpgid(pid_fork, pid_fork);         // race condition: también en el parent
+                // BACKGROUND: no cedemos el terminal, el shell sigue activo
+                // Añadimos el job a la lista para poder gestionarlo después
+                mask_signal(SIGCHLD, SIG_BLOCK);
+                add_job(job_list, new_job(pid_fork,argv[0],BACKGROUND));
+                mask_signal(SIGCHLD, SIG_UNBLOCK);
+                printf("[%d] (%s) Running in Background\n", pid_fork, args1[0]);
+
+                }
+            continue;
+        }
+
+
+
         // Comando interno: jobs
         // Muestra la lista de tareas en segundo plano o suspendidas
 
