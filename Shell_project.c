@@ -38,6 +38,7 @@
 //  manejadores establecidos con signal() o sigaction()
 
 list_head_t *job_list;
+#define PATH_MAX_LEN 4096
 
 
 
