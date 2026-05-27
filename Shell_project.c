@@ -41,6 +41,7 @@ list_head_t *job_list;
 
 
 
+
 // -----------------------------------------------------------------------------
 // Useful functions to deal with signal handlers and signal masks
 
@@ -233,11 +234,34 @@ int main(void)
  
         // Comando interno: cd
         // Cambia el directorio de trabajo del shell usando chdir()
+    
+        if (strcmp(argv[0], "cd") == 0) {
 
-        if ( strcmp(argv[0], "cd") == 0){
-            if (chdir(argv[1]) == -1) {
-                perror(argv[1]);
+            char *curdir, curdirbuf[PATH_MAX_LEN+1];
+            curdir = getcwd(curdirbuf, PATH_MAX_LEN);
+
+            if (argv[1] == NULL) {
+                char *p = getenv("HOME");
+                if (p && chdir(p) == 0) {
+                    setenv("OLDPWD", curdir, 1);
+                }
+
+            } else if (strcmp(argv[1], "-") == 0) {
+                char *p = getenv("OLDPWD");
+                if (p == NULL || strcmp(p, "") == 0) {
+                    printf("No habia directorio anterior\n");
+                } else {
+                    if (chdir(p) == 0) {
+                        if (curdir) setenv("OLDPWD", curdir, 1);
+                    }
+                }
+
+            } else {
+                if (chdir(argv[1]) == 0) {
+                    if (curdir) setenv("OLDPWD", curdir, 1);
+                }
             }
+
             continue;
         }
 
