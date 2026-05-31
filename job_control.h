@@ -20,8 +20,8 @@
 // -----------------------------------------------------------------------------
 
 // ----------- enumeration & strings -------------------------------------------
-enum job_state { FOREGROUND, BACKGROUND, STOPPED };
-static char* state_strings[] = { "Foreground", "Background", "Stopped" };
+enum job_state { FOREGROUND, BACKGROUND, STOPPED, RESPAWNABLE };
+static char* state_strings[] = { "Foreground", "Background", "Stopped" , "Respawnable"};
 
 // ----------- TYPE FOR JOB ----------------------------------------------------
 typedef struct

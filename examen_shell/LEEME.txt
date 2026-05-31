@@ -1,0 +1,138 @@
+================================================================================
+GUÍA RÁPIDA PARA EL EXAMEN DE SHELL
+================================================================================
+
+ESTRUCTURA DE LOS FICHEROS DE REFERENCIA:
+  01_plantillas_base.c          → plantillas fork, thread, proceso timer, etc.
+  02_comandos_internos_probables.c → 10 comandos internos probables implementados
+  03_señales_modos_temporizadores.c → alarm-proc, modos nuevos, manejadores
+  04_scripts_bash_probables.sh  → 8 scripts bash listos para adaptar
+  05_referencia_funciones.c     → referencia rápida de todas las funciones
+
+
+================================================================================
+ESTRATEGIA PARA EL EXAMEN
+================================================================================
+
+1. LEER EL ENUNCIADO COMPLETO antes de escribir una sola línea de código.
+   Identificar:
+   - ¿Es un comando interno nuevo? → buscar en 02_comandos_internos_probables.c
+   - ¿Usa fork+exec? → copiar PLANTILLA 1 de 01_plantillas_base.c
+   - ¿Usa threads? → copiar PLANTILLA 2
+   - ¿Usa proceso temporizador? → copiar PLANTILLA 3
+   - ¿Hay un nuevo símbolo al final de línea? → copiar PLANTILLA 4
+   - ¿Piden un script bash? → copiar el más parecido de 04_scripts_bash_probables.sh
+
+2. SIEMPRE COMPROBAR:
+   - ¿Accedo a job_list? → bloquear SIGCHLD antes y desbloquear después
+   - ¿Hago fork? → setpgid(0,0) en el hijo Y setpgid(pid,pid) en el padre
+   - ¿El hijo es foreground? → tcsetpgrp al hijo antes del waitpid,
+                                tcsetpgrp al shell después del waitpid
+   - ¿Los mensajes tienen el formato exacto del enunciado?
+   - ¿Hay continue al final de cada comando interno?
+   - ¿Las variables nuevas se resetean al inicio de cada iteración del bucle?
+
+3. ERRORES COMUNES A EVITAR:
+   - Olvidar terminal_signals(SIG_DFL) en el hijo
+   - Olvidar tcsetpgrp después del waitpid (el shell no recupera el terminal)
+   - Usar argv[0] en mensajes cuando debería ser args[0] o el nombre del comando
+   - Comparar strings con == en vez de strcmp
+   - NULL en arrays de int (usar contador en su lugar)
+   - exit() en vez de continue cuando hay error en comando interno
+   - Olvidar resetear variables de modo al inicio del bucle
+
+
+================================================================================
+COMANDOS INTERNOS QUE YA TIENES IMPLEMENTADOS (para referencia)
+================================================================================
+
+  cd [dir|-]       → cambiar directorio (con cd - para volver al anterior)
+  jobs             → listar jobs en background/suspendidos
+  fg [n]           → traer job a foreground
+  bg [n]           → reanudar job en background
+  exit [n]         → salir del shell con código n
+  lanzabg <cmd>    → lanzar comando en background (= cmd &)
+  mask [sigs] -c <cmd> → lanzar comando con señales bloqueadas
+  alarm-thread N <cmd> → lanzar cmd con timeout N segundos (thread)
+  fico [prefijo]   → contar ficheros con prefijo (invoca cuentafich.sh)
+  deljob           → borrar job actual de la lista
+  zjobs            → listar PIDs de procesos zombie hijos del shell
+  currjob          → mostrar job actual
+
+
+================================================================================
+FORMATO DE MENSAJES (exacto, sin espacios de más)
+================================================================================
+
+Foreground termina normalmente:
+  [PID] (cmd) Terminated with status: N
+
+Foreground termina por señal:
+  [PID] (cmd) Signaled by signal: N
+
+Foreground suspendido:
+  [PID] (cmd) Stopped by signal: N
+
+Background lanzado:
+  [PID] (cmd) Running in Background
+
+fg ejecutado:
+  [PID] (cmd) Running in FOREGROUND
+
+bg ejecutado (suspendido → background):
+  [PID] (cmd) Running in BACKGROUND
+
+bg ejecutado (ya en background):
+  [PID] (cmd) Already in BACKGROUND
+
+Manejador SIGCHLD - terminado:
+  [PID] (cmd) Terminated with status: N
+  [PID] (cmd) Signaled by signal: N
+
+Manejador SIGCHLD - suspendido:
+  [PID] (cmd) Stopped by signal: N
+
+Manejador SIGCHLD - reanudado:
+  [PID] (cmd) Continued
+
+
+================================================================================
+CHECKLIST ANTES DE ENTREGAR
+================================================================================
+
+[ ] El shell básico funciona: ls, ls &, CTRL+Z, fg, bg, jobs, cd, redirecciones
+[ ] No hay zombies (manejador SIGCHLD funciona)
+[ ] CTRL+C no mata el shell
+[ ] CTRL+Z en foreground → aparece en jobs como Stopped
+[ ] Los mensajes tienen el formato exacto
+[ ] Las variables de modo se resetean al inicio del bucle
+[ ] Compilar sin warnings: gcc Shell_project.c parse_line.c list.c job_control.c -lpthread -o Shell
+
+
+================================================================================
+SEÑALES MÁS USADAS (números)
+================================================================================
+
+  1  SIGHUP   - terminal cerrado
+  2  SIGINT   - CTRL+C
+  3  SIGQUIT  - CTRL+\
+  9  SIGKILL  - matar (no se puede ignorar)
+ 10  SIGUSR1  - señal usuario 1
+ 12  SIGUSR2  - señal usuario 2
+ 15  SIGTERM  - terminar (se puede ignorar)
+ 17  SIGCHLD  - hijo cambió estado
+ 18  SIGCONT  - reanudar proceso suspendido
+ 19  SIGSTOP  - suspender (no se puede ignorar)
+ 20  SIGTSTP  - CTRL+Z (se puede ignorar)
+ 21  SIGTTIN  - bg intentó leer del terminal
+ 22  SIGTTOU  - bg intentó escribir en terminal
+
+
+================================================================================
+FLAGS DE open() MÁS USADOS
+================================================================================
+
+  O_RDONLY              → solo lectura (para redirección <)
+  O_WRONLY | O_CREAT | O_TRUNC   → escritura, crear si no existe, vaciar (>)
+  O_WRONLY | O_CREAT | O_APPEND  → escritura al final (>>)
+  Tercer argumento: 0644 (permisos: dueño rw, grupo r, otros r)
