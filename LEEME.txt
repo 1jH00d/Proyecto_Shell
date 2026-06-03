@@ -1,38 +1,4 @@
-================================================================================
-GUÍA RÁPIDA PARA EL EXAMEN DE SHELL
-================================================================================
-
-ESTRUCTURA DE LOS FICHEROS DE REFERENCIA:
-  01_plantillas_base.c          → plantillas fork, thread, proceso timer, etc.
-  02_comandos_internos_probables.c → 10 comandos internos probables implementados
-  03_señales_modos_temporizadores.c → alarm-proc, modos nuevos, manejadores
-  04_scripts_bash_probables.sh  → 8 scripts bash listos para adaptar
-  05_referencia_funciones.c     → referencia rápida de todas las funciones
-
-
-================================================================================
-ESTRATEGIA PARA EL EXAMEN
-================================================================================
-
-1. LEER EL ENUNCIADO COMPLETO antes de escribir una sola línea de código.
-   Identificar:
-   - ¿Es un comando interno nuevo? → buscar en 02_comandos_internos_probables.c
-   - ¿Usa fork+exec? → copiar PLANTILLA 1 de 01_plantillas_base.c
-   - ¿Usa threads? → copiar PLANTILLA 2
-   - ¿Usa proceso temporizador? → copiar PLANTILLA 3
-   - ¿Hay un nuevo símbolo al final de línea? → copiar PLANTILLA 4
-   - ¿Piden un script bash? → copiar el más parecido de 04_scripts_bash_probables.sh
-
-2. SIEMPRE COMPROBAR:
-   - ¿Accedo a job_list? → bloquear SIGCHLD antes y desbloquear después
-   - ¿Hago fork? → setpgid(0,0) en el hijo Y setpgid(pid,pid) en el padre
-   - ¿El hijo es foreground? → tcsetpgrp al hijo antes del waitpid,
-                                tcsetpgrp al shell después del waitpid
-   - ¿Los mensajes tienen el formato exacto del enunciado?
-   - ¿Hay continue al final de cada comando interno?
-   - ¿Las variables nuevas se resetean al inicio de cada iteración del bucle?
-
-3. ERRORES COMUNES A EVITAR:
+ERRORES A EVITAR:
    - Olvidar terminal_signals(SIG_DFL) en el hijo
    - Olvidar tcsetpgrp después del waitpid (el shell no recupera el terminal)
    - Usar argv[0] en mensajes cuando debería ser args[0] o el nombre del comando
@@ -43,7 +9,7 @@ ESTRATEGIA PARA EL EXAMEN
 
 
 ================================================================================
-COMANDOS INTERNOS QUE YA TIENES IMPLEMENTADOS (para referencia)
+COMANDOS INTERNOS IMPLEMENTADOS
 ================================================================================
 
   cd [dir|-]       → cambiar directorio (con cd - para volver al anterior)
@@ -61,42 +27,6 @@ COMANDOS INTERNOS QUE YA TIENES IMPLEMENTADOS (para referencia)
 
 
 ================================================================================
-FORMATO DE MENSAJES (exacto, sin espacios de más)
-================================================================================
-
-Foreground termina normalmente:
-  [PID] (cmd) Terminated with status: N
-
-Foreground termina por señal:
-  [PID] (cmd) Signaled by signal: N
-
-Foreground suspendido:
-  [PID] (cmd) Stopped by signal: N
-
-Background lanzado:
-  [PID] (cmd) Running in Background
-
-fg ejecutado:
-  [PID] (cmd) Running in FOREGROUND
-
-bg ejecutado (suspendido → background):
-  [PID] (cmd) Running in BACKGROUND
-
-bg ejecutado (ya en background):
-  [PID] (cmd) Already in BACKGROUND
-
-Manejador SIGCHLD - terminado:
-  [PID] (cmd) Terminated with status: N
-  [PID] (cmd) Signaled by signal: N
-
-Manejador SIGCHLD - suspendido:
-  [PID] (cmd) Stopped by signal: N
-
-Manejador SIGCHLD - reanudado:
-  [PID] (cmd) Continued
-
-
-================================================================================
 CHECKLIST ANTES DE ENTREGAR
 ================================================================================
 
@@ -110,7 +40,7 @@ CHECKLIST ANTES DE ENTREGAR
 
 
 ================================================================================
-SEÑALES MÁS USADAS (números)
+SEÑALES MÁS USADAS
 ================================================================================
 
   1  SIGHUP   - terminal cerrado
@@ -126,6 +56,22 @@ SEÑALES MÁS USADAS (números)
  20  SIGTSTP  - CTRL+Z (se puede ignorar)
  21  SIGTTIN  - bg intentó leer del terminal
  22  SIGTTOU  - bg intentó escribir en terminal
+
+// kill(pid, sig) - mandar señal a un proceso
+// pid < 0: mandar al grupo |pid|
+kill(pid_fork, SIGKILL);
+kill(-pgid, SIGCONT);  // equivalente a killpg
+
+// killpg(pgid, sig) - mandar señal a todo un grupo
+killpg(pgid, SIGKILL);
+killpg(pgid, SIGCONT);
+killpg(pgid, SIGSTOP);
+killpg(pgid, 0);        // comprobar si el grupo existe (sin matar)
+
+// mask_signal(signal, block) - bloquear/desbloquear señal
+// (función propia del shell, implementada con sigprocmask)
+mask_signal(SIGCHLD, SIG_BLOCK);    // bloquear
+mask_signal(SIGCHLD, SIG_UNBLOCK);  // desbloquear
 
 
 ================================================================================

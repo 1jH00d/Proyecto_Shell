@@ -97,5 +97,183 @@ void print_job_list(list_head_t *this)
 }
 // -----------------------------------------------------------------------------
 
+/*
+# =============================================================================
+# BUCLES
+# =============================================================================
+
+# for con lista de valores:
+for i in 1 2 3 4 5; do
+    echo $i
+done
+
+# for con rango (seq):
+for i in $(seq 1 10); do
+    echo $i
+done
+
+# for recorriendo ficheros del directorio actual:
+for f in *; do
+    if [ -f "$f" ]; then
+        echo "Fichero: $f"
+    fi
+done
+
+# for recorriendo argumentos del script:
+for arg in "$@"; do
+    echo "Argumento: $arg"
+done
+
+# while:
+N=0
+while [ $N -lt 10 ]; do
+    N=$((N+1))
+    echo $N
+done
+
+# until (hasta que la condición sea verdadera):
+until [ $N -eq 0 ]; do
+    N=$((N-1))
+done
+
+# break y continue:
+for i in 1 2 3 4 5; do
+    if [ $i -eq 2 ]; then continue; fi   # saltar iteración
+    if [ $i -eq 4 ]; then break; fi      # salir del bucle
+    echo $i
+done
+
+
+# =============================================================================
+# CAPTURAR SALIDA DE COMANDOS
+# =============================================================================
+N=$(ls | wc -l)              # contar ficheros
+FECHA=$(date)                # capturar fecha
+LINEAS=$(wc -l < fichero)    # contar líneas de un fichero
+RESULTADO=$(comando)         # guardar cualquier salida
+
+
+# =============================================================================
+# PIPES Y FILTROS ÚTILES
+# =============================================================================
+
+# Contar ficheros (no directorios) en directorio actual:
+N=$(ls -pA | grep -v "/" | wc -l)
+
+# Contar ficheros con prefijo:
+N=$(ls -pA | grep -v "/" | grep "^PREFIJO" | wc -l)
+
+# Contar ficheros con extensión:
+N=$(ls -pA | grep -v "/" | grep "\.ext$" | wc -l)
+
+# Contar directorios:
+N=$(ls -pA | grep "/" | wc -l)
+
+# Buscar texto en ficheros:
+N=$(grep -rl "texto" . 2>/dev/null | wc -l)
+
+# Contar procesos de un usuario:
+N=$(ps -u $USER --no-headers 2>/dev/null | wc -l)
+
+# Notas sobre ls:
+# ls -p  → añade / al final de directorios
+# ls -A  → incluye ficheros ocultos (excepto . y ..)
+# ls -1  → un fichero por línea
+# ls -pA → combinación: incluye ocultos y marca directorios
+
+# =============================================================================
+# FUNCIONES
+# =============================================================================
+mi_funcion() {
+    local resultado=$1    # local: variable local a la función
+    echo "Argumento: $resultado"
+    return 0              # valor de retorno (0-255)
+}
+
+mi_funcion "hola"
+echo "Retornó: $?"
+
+
+# =============================================================================
+# OPERACIONES ÚTILES
+# =============================================================================
+STR="hola mundo"
+echo ${#STR}              # longitud: 10
+echo ${STR:0:4}           # subcadena: "hola"
+echo ${STR/hola/adios}    # reemplazar primera ocurrencia
+echo ${STR^^}             # HOLA MUNDO (mayúsculas)
+echo ${STR,,}             # hola mundo (minúsculas)
+
+# Valor por defecto si variable no existe:
+PREFIJO=${1:-""}          # si $1 no está, usar ""
+USER=${1:-$(whoami)}      # si $1 no está, usar el usuario actual
+
+
+# =============================================================================
+# ARRAYS
+# =============================================================================
+arr=(1 2 3 4 5)           # declarar array
+echo ${arr[0]}            # primer elemento: 1
+echo ${arr[-1]}           # último elemento: 5
+echo ${arr[@]}            # todos los elementos
+echo ${#arr[@]}           # número de elementos: 5
+arr+=(6)                  # añadir elemento al final
+
+# Recorrer array:
+for elem in "${arr[@]}"; do
+    echo $elem
+done
+
+
+# =============================================================================
+# ENTRADA/SALIDA Y REDIRECCIONES
+# =============================================================================
+echo "texto"              # imprimir con salto de línea
+printf "texto\n"          # más control del formato
+read VAR                  # leer línea del teclado
+read -p "Nombre: " VAR    # leer con prompt
+
+# Redirecciones:
+comando > fichero         # sobreescribir
+comando >> fichero        # añadir al final
+comando < fichero         # leer desde fichero
+comando 2> errores.txt    # redirigir stderr
+comando &> todo.txt       # redirigir stdout y stderr
+comando 2>/dev/null       # descartar errores
+
+# =============================================================================
+# MISCELÁNEA ÚTIL
+# =============================================================================
+sleep 5                   # esperar 5 segundos (para el evaluador)
+exit 0                    # salir con éxito
+exit 1                    # salir con error
+chmod +x script.sh        # dar permisos de ejecución
+
+# Comprobar si un proceso existe:
+if kill -0 $PID 2>/dev/null; then
+    echo "El proceso $PID existe"
+fi
+
+# Comprobar si un comando existe:
+if command -v gcc &>/dev/null; then
+    echo "gcc existe"
+fi
+
+# Ejecutar comando y capturar código de retorno:
+ls /no/existe 2>/dev/null
+if [ $? -eq 0 ]; then
+    echo "OK"
+else
+    echo "Error"
+fi
+
+# Equivalente más corto:
+if ls /no/existe 2>/dev/null; then
+    echo "OK"
+else
+    echo "Error"
+fi
+
+*/
 
 
